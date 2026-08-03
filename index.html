@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QuieroTejer Celular</title>
+    
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#FF8A80">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Style sheet -->
+    <link rel="stylesheet" href="style.css?v=2.4">
+</head>
+<body>
+    <div id="app-container">
+        
+        <!-- ─── SCREEN 1: LOGIN ─── -->
+        <div id="screen-login" class="screen active">
+            <div class="login-header">
+                <img src="logo_largo.png" class="login-logo" alt="QuieroTejer">
+                <p>Ingresá para gestionar el stock desde el celular</p>
+            </div>
+            
+            <form id="login-form" class="form-card">
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" placeholder="Tu usuario (ej. maria)" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary" id="btn-login-submit">Iniciar Sesión</button>
+                <div id="login-error" class="error-msg"></div>
+            </form>
+        </div>
+
+        <!-- ─── SCREEN 2: HOME / MENU ─── -->
+        <div id="screen-home" class="screen">
+            <header class="app-header">
+                <div>
+                    <span class="user-badge" id="user-role-badge">Admin</span>
+                    <h2 id="home-user-greeting">Hola, María 👋</h2>
+                </div>
+                <button id="btn-logout" class="btn-logout-icon" title="Cerrar sesión">🚪</button>
+            </header>
+            
+            <div class="home-menu">
+                <button class="menu-card" id="go-to-stock">
+                    <div class="menu-icon">✏️</div>
+                    <div class="menu-details">
+                        <h3>Ajuste de Stock</h3>
+                        <p>Suma, resta y actualiza stock al instante en Tiendanube</p>
+                    </div>
+                </button>
+                
+                <button class="menu-card" id="go-to-alerts">
+                    <div class="menu-icon">🚨</div>
+                    <div class="menu-details">
+                        <h3>Alerta de Faltantes</h3>
+                        <p>Chequeá qué hilados y colores tienen stock crítico en fábrica</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── SCREEN 3: STOCK ADJUST ─── -->
+        <div id="screen-stock" class="screen">
+            <header class="screen-header">
+                <button class="btn-back" id="back-from-stock">⬅️ Volver</button>
+                <h2>Ajuste de Stock</h2>
+            </header>
+            
+            <div class="content-card">
+                <div class="form-group">
+                    <label for="select-model">Modelo de Hilado</label>
+                    <div class="searchable-select-wrapper">
+                        <input type="text" id="select-model" class="large-select" placeholder="Buscar modelo (ej. BRILL)..." autocomplete="off">
+                        <div id="models-dropdown-list" class="custom-dropdown-list hidden"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="select-color">Color / Variante</label>
+                    <select id="select-color" class="large-select" disabled>
+                        <option value="">Seleccione un color...</option>
+                    </select>
+                </div>
+                
+                <div id="stock-reference-container" class="stock-reference-text hidden">
+                    <!-- Se llena con JS -->
+                </div>
+                
+                <div id="adjustment-controls" class="adjustment-section hidden">
+                    <label>Ajustar Cantidad</label>
+                    
+                    <div class="quick-buttons">
+                        <button class="btn btn-adjust btn-minus-large" data-val="-10">-10</button>
+                        <button class="btn btn-adjust btn-minus-small" data-val="-1">-1</button>
+                        <button class="btn btn-adjust btn-plus-small" data-val="+1">+1</button>
+                        <button class="btn btn-adjust btn-plus-large" data-val="+10">+10</button>
+                    </div>
+                    
+                    <div class="input-adjust-wrapper">
+                        <span class="adjustment-sign" id="adj-sign"></span>
+                        <input type="number" id="manual-adjust-input" placeholder="0" min="-9999" max="9999">
+                    </div>
+                    
+                    <button class="btn btn-primary btn-save" id="btn-save-stock">💾 Guardar y Sincronizar</button>
+                </div>
+                
+                <div id="stock-feedback" class="feedback-toast"></div>
+            </div>
+        </div>
+
+        <!-- ─── SCREEN 4: ALERTS ─── -->
+        <div id="screen-alerts" class="screen">
+            <header class="screen-header">
+                <button class="btn-back" id="back-from-alerts">⬅️ Volver</button>
+                <h2>Alerta de Faltantes</h2>
+            </header>
+            
+            <button id="btn-sync-catalog" class="btn-sync-discreto">🔄 Sincronizar con Tiendanube</button>
+            
+            <div class="alerts-filters">
+                <div class="filter-group">
+                    <label for="alerts-model">Modelo de Hilado</label>
+                    <div class="searchable-select-wrapper">
+                        <input type="text" id="alerts-model" placeholder="Filtrar modelo (ej. Peluche)..." autocomplete="off">
+                        <div id="alerts-models-list" class="custom-dropdown-list hidden"></div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label for="alerts-color">Color / Variante</label>
+                    <select id="alerts-color" disabled>
+                        <option value="">Seleccione un color...</option>
+                    </select>
+                </div>
+                <div class="filter-dropdown">
+                    <label for="alerts-limit">Stock <=</label>
+                    <select id="alerts-limit">
+                        <option value="0">0 (Sin Stock)</option>
+                        <option value="5">5 unidades</option>
+                        <option value="10" selected>10 unidades</option>
+                        <option value="15">15 unidades</option>
+                        <option value="20">20 unidades</option>
+                        <option value="30">30 unidades</option>
+                        <option value="40">40 unidades</option>
+                        <option value="50">50 unidades</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="alerts-container">
+                <div id="alerts-loading" class="alerts-status">Cargando alertas...</div>
+                <div id="alerts-list" class="alerts-list">
+                    <!-- Se llena con JS -->
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Application Javascript logic -->
+    <script src="app.js?v=2.4"></script>
+</body>
+</html>
