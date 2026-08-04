@@ -6,8 +6,8 @@ import sys
 import os
 import requests
 
-# Agregar la ruta de QuieroTejer de escritorio para poder importar sus módulos directamente
-sys.path.append(r"c:\Maria\MyProjects\QT")
+# Agregar el directorio raíz de la app móvil al path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database.connection import get_connection
 from services.security import verify_password
@@ -24,7 +24,7 @@ from services.tiendanube import (
     update_variant_stock_price
 )
 
-PORT = 8080
+PORT = int(os.environ.get("PORT", 8080))
 
 class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
