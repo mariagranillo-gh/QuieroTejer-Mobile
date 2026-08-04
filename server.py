@@ -259,6 +259,120 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(500, {"success": False, "error": str(e)})
             return
 
+        elif path == "/api/webhook":
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                store_id = data.get("store_id") or data.get("user_id")
+                event = data.get("event")
+                product_id = data.get("id")
+                
+                print(f"[Webhook] Recibido evento: '{event}' para Store: {store_id}, Product ID: {product_id}")
+                
+                saved_store_id = get_config_value('TiendaNubeStoreId')
+                
+                if str(store_id) != str(saved_store_id):
+                    print(f"[Webhook] Store ID {store_id} no coincide con el configurado {saved_store_id}. Ignorando.")
+                    self.send_json_response(200, {"success": True, "message": "Ignorado por Store ID diferente"})
+                    return
+                    
+                if event == "product/updated" and product_id:
+                    access_token = get_config_value('TiendaNubeAccessToken')
+                    user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
+                    
+                    if not access_token:
+                        print("[Webhook] Access Token no configurado. Abortando.")
+                        self.send_json_response(500, {"success": False, "error": "Access Token no configurado"})
+                        return
+                        
+                    url = f"https://api.tiendanube.com/v1/{store_id}/products/{product_id}"
+                    headers = {
+                        "Authorization": f"Bearer {str(access_token).strip()}",
+                        "User-Agent": user_agent,
+                        "Content-Type": "application/json"
+                    }
+                    
+                    r = requests.get(url, headers=headers, timeout=10)
+                    if r.status_code == 200:
+                        product_data = r.json()
+                        variants_list = product_data.get("variants", [])
+                        
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        
+                        updated_count = 0
+                        for v in variants_list:
+                            sku = v.get("sku")
+                            tn_stock = v.get("stock")
+                            
+                            if tn_stock is None or sku is None:
+                                continue
+                                
+                            sku_clean = str(sku).strip().upper()
+                            if not sku_clean:
+                                continue
+                                
+                            cursor.execute("""
+                                SELECT id, stock, color_name 
+                                FROM product_variants 
+                                WHERE UPPER(TRIM(sku)) = %s AND is_active = TRUE
+                            """, (sku_clean,))
+                            local_var = cursor.fetchone()
+                            
+                            if local_var:
+                                local_stock = local_var["stock"]
+                                if local_stock != tn_stock:
+                                    delta = tn_stock - local_stock
+                                    
+                                    cursor.execute("""
+                                        SELECT m.name AS model_name 
+                                        FROM product_variants v 
+                                        JOIN product_models m ON v.product_model_id = m.id 
+                                        WHERE v.id = %s
+                                    """, (local_var["id"],))
+                                    model_info = cursor.fetchone()
+                                    model_name = model_info["model_name"] if model_info else "Modelo Desconocido"
+                                    
+                                    cursor.execute("""
+                                        UPDATE product_variants 
+                                        SET stock = %s, updated_at = CURRENT_TIMESTAMP 
+                                        WHERE id = %s
+                                    """, (tn_stock, local_var["id"]))
+                                    
+                                    cursor.execute("""
+                                        INSERT INTO stock_movements_log (source, model_name, color_name, quantity, original_stock, resulting_stock, user_name)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    """, (
+                                        "Webhook Tiendanube",
+                                        model_name,
+                                        local_var["color_name"],
+                                        delta,
+                                        local_stock,
+                                        tn_stock,
+                                        "Tiendanube System"
+                                    ))
+                                    updated_count += 1
+                                    print(f"[Webhook] SKU: {sku_clean} actualizado localmente de {local_stock} a {tn_stock} (Diferencia: {delta})")
+                        
+                        conn.commit()
+                        conn.close()
+                        self.send_json_response(200, {"success": True, "updated_variants": updated_count})
+                        return
+                    else:
+                        print(f"[Webhook] Error al consultar API de Tiendanube (Código: {r.status_code}): {r.text}")
+                        self.send_json_response(500, {"success": False, "error": "Error al consultar API de Tiendanube"})
+                        return
+                else:
+                    print(f"[Webhook] Evento '{event}' no soportado o ID faltante. Ignorando.")
+                    self.send_json_response(200, {"success": True, "message": "Evento ignorado"})
+                    return
+            except Exception as e:
+                print(f"[Webhook] Excepción: {e}")
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
         elif path == "/api/sync_catalog":
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length > 0:
