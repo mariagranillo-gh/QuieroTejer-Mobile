@@ -90,7 +90,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 # Consultar Tiendanube
                 store_id = get_config_value('TiendaNubeStoreId')
                 access_token = get_config_value('TiendaNubeAccessToken')
-                user_agent = get_config_value('TiendaNubeUserAgent')
+                user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
 
                 tn_stock = "Desconectado"
 
@@ -208,7 +208,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 # 2. Intentar Sincronización instantánea con Tiendanube
                 store_id = get_config_value('TiendaNubeStoreId')
                 access_token = get_config_value('TiendaNubeAccessToken')
-                user_agent = get_config_value('TiendaNubeUserAgent')
+                user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
 
                 sync_msg = "Ajuste guardado localmente."
                 sync_success = False
@@ -382,7 +382,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 # 1. Cargar credenciales de Tiendanube
                 store_id = get_config_value('TiendaNubeStoreId')
                 access_token = get_config_value('TiendaNubeAccessToken')
-                user_agent = get_config_value('TiendaNubeUserAgent')
+                user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
 
                 if not store_id or not access_token or not user_agent:
                     self.send_json_response(400, {"success": False, "error": "Credenciales de Tiendanube no configuradas."})
