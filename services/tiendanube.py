@@ -99,28 +99,18 @@ def get_variant_by_url_and_color(store_id, access_token, user_agent, url_identif
     }
     
     try:
-        page = 1
-        target_product = None
+        response = requests.get(url, headers=headers, params={"handle": handle_clean}, timeout=15)
+        if response.status_code != 200:
+            return {"success": False, "error": f"Error al buscar en catálogo de Tiendanube (Código HTTP: {response.status_code})."}
         
-        while True:
-            response = requests.get(url, headers=headers, params={"q": handle_clean, "per_page": 100, "page": page}, timeout=15)
-            if response.status_code != 200:
-                return {"success": False, "error": f"Error al buscar en catálogo de Tiendanube (Código HTTP: {response.status_code})."}
-            
-            page_products = response.json()
-            if not page_products:
-                break
-                
+        page_products = response.json()
+        target_product = None
+        if isinstance(page_products, list) and page_products:
             for p in page_products:
                 p_handles = p.get("handle", {})
                 if any(str(val).strip().lower() == handle_clean for val in p_handles.values()):
                     target_product = p
                     break
-            
-            if target_product:
-                break
-                
-            page += 1
             
         if not target_product:
             return {"success": False, "error": f"No se encontró ningún producto con el identificador de URL '{url_identifier}' en Tiendanube."}
