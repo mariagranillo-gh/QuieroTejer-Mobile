@@ -303,24 +303,59 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                         cursor = conn.cursor()
                         
                         updated_count = 0
+                        
+                        # Obtener handle del producto para fallback de búsqueda por URL
+                        url_id_clean = None
+                        p_handle = product_data.get("handle", {})
+                        if isinstance(p_handle, dict):
+                            for val in p_handle.values():
+                                if val:
+                                    url_id_clean = str(val).strip().lower()
+                                    break
+                        elif isinstance(p_handle, str) and p_handle:
+                            url_id_clean = p_handle.strip().lower()
+
                         for v in variants_list:
                             sku = v.get("sku")
                             tn_stock = v.get("stock")
                             
-                            if tn_stock is None or sku is None:
+                            if tn_stock is None:
                                 continue
                                 
-                            sku_clean = str(sku).strip().upper()
-                            if not sku_clean:
-                                continue
-                                
-                            cursor.execute("""
-                                SELECT id, stock, color_name 
-                                FROM product_variants 
-                                WHERE UPPER(TRIM(sku)) = %s AND is_active = TRUE
-                            """, (sku_clean,))
-                            local_var = cursor.fetchone()
+                            local_var = None
                             
+                            # 1. Intentar buscar por SKU
+                            if sku:
+                                sku_clean = str(sku).strip().upper()
+                                if sku_clean:
+                                    cursor.execute("""
+                                        SELECT id, stock, color_name 
+                                        FROM product_variants 
+                                        WHERE UPPER(TRIM(sku)) = %s AND is_active = TRUE
+                                    """, (sku_clean,))
+                                    local_var = cursor.fetchone()
+                                    
+                            # 2. Fallback a buscar por URL identificadora + Color si no se encontró por SKU
+                            if not local_var and url_id_clean:
+                                color_name_clean = None
+                                for val_obj in v.get("values", []):
+                                    if isinstance(val_obj, dict):
+                                        for val in val_obj.values():
+                                            if val:
+                                                color_name_clean = str(val).strip().upper()
+                                                break
+                                    elif isinstance(val_obj, str) and val_obj:
+                                        color_name_clean = val_obj.strip().upper()
+                                        break
+                                
+                                if color_name_clean:
+                                    cursor.execute("""
+                                        SELECT id, stock, color_name 
+                                        FROM product_variants 
+                                        WHERE UPPER(TRIM(url_identifier)) = %s AND UPPER(TRIM(color_name)) = %s AND is_active = TRUE
+                                    """, (url_id_clean, color_name_clean))
+                                    local_var = cursor.fetchone()
+                                    
                             if local_var:
                                 local_stock = local_var["stock"]
                                 if local_stock != tn_stock:
