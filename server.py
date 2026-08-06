@@ -352,7 +352,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                                     cursor.execute("""
                                         SELECT id, stock, color_name 
                                         FROM product_variants 
-                                        WHERE UPPER(TRIM(url_identifier)) = %s AND UPPER(TRIM(color_name)) = %s AND is_active = TRUE
+                                        WHERE LOWER(TRIM(url_identifier)) = %s AND UPPER(TRIM(color_name)) = %s AND is_active = TRUE
                                     """, (url_id_clean, color_name_clean))
                                     local_var = cursor.fetchone()
                                     
