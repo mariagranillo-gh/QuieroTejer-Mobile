@@ -389,7 +389,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                                         "Tiendanube System"
                                     ))
                                     updated_count += 1
-                                    print(f"[Webhook] SKU: {sku_clean} actualizado localmente de {local_stock} a {tn_stock} (Diferencia: {delta})")
+                                    print(f"[Webhook] SKU: {sku or 'N/A'} (Color: {local_var['color_name']}) actualizado localmente de {local_stock} a {tn_stock} (Diferencia: {delta})")
                         
                         conn.commit()
                         conn.close()
