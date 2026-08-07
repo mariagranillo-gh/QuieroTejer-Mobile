@@ -21,7 +21,8 @@ from database.queries import (
 from services.tiendanube import (
     get_variant_by_url_and_color,
     get_variant_by_sku,
-    update_variant_stock_price
+    update_variant_stock_price,
+    update_product_visibility
 )
 
 PORT = int(os.environ.get("PORT", 8080))
@@ -242,6 +243,38 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                             update_variants_sync_status([variant_id], 'Exportado')
                             sync_msg += " ¡Sincronizado con Tiendanube!"
                             sync_success = True
+                            
+                            # Control de visibilidad del producto en Tiendanube
+                            try:
+                                prod_url = f"https://api.tiendanube.com/v1/{str(store_id).strip()}/products/{tn_prod_id}"
+                                headers = {
+                                    "Authorization": f"Bearer {str(access_token).strip()}",
+                                    "User-Agent": str(user_agent).strip(),
+                                    "Content-Type": "application/json"
+                                }
+                                r_prod = requests.get(prod_url, headers=headers, timeout=10)
+                                if r_prod.status_code == 200:
+                                    prod_data = r_prod.json()
+                                    total_stock = 0
+                                    for v in prod_data.get("variants", []):
+                                        total_stock += int(v.get("stock") or 0)
+                                        
+                                    is_currently_published = bool(prod_data.get("published", True))
+                                    should_publish = total_stock > 0
+                                    
+                                    if should_publish != is_currently_published:
+                                        vis_ok = update_product_visibility(
+                                            store_id=store_id,
+                                            access_token=access_token,
+                                            user_agent=user_agent,
+                                            product_id=tn_prod_id,
+                                            published=should_publish
+                                        )
+                                        if vis_ok:
+                                            state_str = "mostrado en tienda" if should_publish else "ocultado de tienda"
+                                            sync_msg += f" (Producto {state_str})"
+                            except Exception as e:
+                                print(f"Error al verificar visibilidad en Tiendanube: {e}")
                         else:
                             sync_msg += f" Error de sincronización: {up_res.get('error')}"
                     else:
