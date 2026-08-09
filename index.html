@@ -64,6 +64,14 @@
                     </div>
                 </button>
                 
+                <button class="menu-card" id="go-to-create-color">
+                    <div class="menu-icon">➕</div>
+                    <div class="menu-details">
+                        <h3>Agregar Color</h3>
+                        <p>Crea un color nuevo para un modelo existente</p>
+                    </div>
+                </button>
+                
                 <button class="menu-card" id="go-to-alerts">
                     <div class="menu-icon">🚨</div>
                     <div class="menu-details">
@@ -168,10 +176,56 @@
                 </div>
             </div>
         </div>
+
+        <!-- ─── SCREEN 5: CREATE COLOR ─── -->
+        <div id="screen-create-color" class="screen">
+            <header class="screen-header">
+                <button class="btn-back" id="back-from-create-color">⬅️ Volver</button>
+                <h2>Agregar Color</h2>
+            </header>
+            
+            <div class="content-card">
+                <div class="form-group">
+                    <label for="create-select-model">Modelo de Hilado</label>
+                    <div class="searchable-select-wrapper">
+                        <input type="text" id="create-select-model" class="large-select" placeholder="Buscar modelo (ej. CASHMILON)..." autocomplete="off">
+                        <div id="create-models-dropdown-list" class="custom-dropdown-list hidden"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="create-color-name">Nombre del Color</label>
+                    <input type="text" id="create-color-name" class="large-select" placeholder="Ej. VERDE ESMERALDA" autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="create-initial-stock">Stock Inicial (Opcional)</label>
+                    <div class="stock-input-wrapper" style="margin-bottom: 8px;">
+                        <input type="number" id="create-initial-stock" class="stock-input-manual" placeholder="0" min="0" value="0">
+                    </div>
+                    <div class="quick-buttons" style="grid-template-columns: repeat(4, 1fr);">
+                        <button type="button" class="btn btn-adjust btn-plus-small" id="btn-create-plus-1">+1</button>
+                        <button type="button" class="btn btn-adjust btn-plus-large" id="btn-create-plus-5">+5</button>
+                        <button type="button" class="btn btn-adjust btn-plus-large" id="btn-create-plus-10">+10</button>
+                        <button type="button" class="btn btn-adjust btn-minus-small" id="btn-create-reset">0</button>
+                    </div>
+                </div>
+                
+                <div class="alert-box-info" style="background: rgba(255, 138, 128, 0.1); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; color: #555; margin: 15px 0;">
+                    🔒 <strong>Nota:</strong> Se creará en Tiendanube de forma <strong>oculta</strong> para que puedas revisarlo y subirle la foto antes de publicarlo.
+                </div>
+                
+                <button class="btn btn-primary" id="btn-save-new-color" style="margin-top: 10px;">
+                    💾 Guardar y Crear Color
+                </button>
+                
+                <div id="create-color-feedback" class="feedback-msg"></div>
+            </div>
+        </div>
         
     </div>
 
     <!-- Application Javascript logic -->
-    <script src="app.js?v=2.5"></script>
+    <script src="app.js?v=2.6"></script>
 </body>
 </html>

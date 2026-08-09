@@ -22,7 +22,8 @@ from services.tiendanube import (
     get_variant_by_url_and_color,
     get_variant_by_sku,
     update_variant_stock_price,
-    update_product_visibility
+    update_product_visibility,
+    create_tiendanube_product
 )
 
 PORT = int(os.environ.get("PORT", 8080))
@@ -48,6 +49,22 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 variants = get_all_active_display_variants()
                 self.send_json_response(200, {"success": True, "variants": variants})
+            except Exception as e:
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
+        elif path == "/api/models":
+            try:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, name, category, price, weight 
+                    FROM product_models 
+                    ORDER BY name
+                """)
+                models = cursor.fetchall()
+                conn.close()
+                self.send_json_response(200, {"success": True, "models": [dict(m) for m in models]})
             except Exception as e:
                 self.send_json_response(500, {"success": False, "error": str(e)})
             return
@@ -287,6 +304,134 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                     "new_stock": new_stock, 
                     "sync_success": sync_success,
                     "message": sync_msg
+                })
+            except Exception as e:
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
+        elif path == "/api/create_variant":
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                model_id = int(data.get("model_id"))
+                color_name = str(data.get("color_name", "")).strip().upper()
+                stock = int(data.get("stock") or 0)
+                username = data.get("username", "Celular PWA")
+
+                if not model_id or not color_name:
+                    self.send_json_response(400, {"success": False, "error": "Falta seleccionar modelo o ingresar color."})
+                    return
+
+                # 1. Obtener datos del modelo padre
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, name, category, price, description, tags, seo_title, seo_description, weight 
+                    FROM product_models 
+                    WHERE id = %s
+                """, (model_id,))
+                model = cursor.fetchone()
+
+                if not model:
+                    conn.close()
+                    self.send_json_response(404, {"success": False, "error": "Modelo no encontrado."})
+                    return
+
+                # 2. Verificar que no exista ya ese color para ese modelo
+                cursor.execute("""
+                    SELECT id FROM product_variants 
+                    WHERE product_model_id = %s AND UPPER(TRIM(color_name)) = %s
+                """, (model_id, color_name))
+                existing = cursor.fetchone()
+                if existing:
+                    conn.close()
+                    self.send_json_response(400, {"success": False, "error": f"El color '{color_name}' ya existe para el modelo '{model['name']}'."})
+                    return
+
+                # 3. Generar handle único para Tiendanube
+                import re
+                import unicodedata
+                raw_handle_name = f"{model['name']} {color_name}".strip().lower()
+                normalized_name = ''.join(c for c in unicodedata.normalize('NFD', raw_handle_name) if unicodedata.category(c) != 'Mn')
+                custom_handle = re.sub(r'[^a-z0-9]+', '-', normalized_name)
+                custom_handle = re.sub(r'-+', '-', custom_handle).strip('-')
+
+                # 4. Crear producto en Tiendanube con published=False (oculto para fotos)
+                store_id = get_config_value('TiendaNubeStoreId')
+                access_token = get_config_value('TiendaNubeAccessToken')
+                user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
+
+                tn_handle = custom_handle
+                tn_created = False
+                tn_error = None
+
+                if store_id and access_token:
+                    create_res = create_tiendanube_product(
+                        store_id=store_id,
+                        access_token=access_token,
+                        user_agent=user_agent,
+                        name_es=model['name'],
+                        description_es=model['description'] or "",
+                        price=float(model['price'] or 0.0),
+                        stock=stock,
+                        weight=float(model['weight'] or 0.100),
+                        published=False,  # Estrictamente oculto por defecto para fotos
+                        color_name=color_name,
+                        tags=model['tags'],
+                        seo_title=model['seo_title'],
+                        seo_description=model['seo_description'],
+                        handle=custom_handle
+                    )
+                    if create_res.get('success'):
+                        tn_handle = create_res.get('handle') or custom_handle
+                        tn_created = True
+                    else:
+                        tn_error = create_res.get('error')
+
+                # 5. Insertar variante en Supabase
+                cursor.execute("""
+                    INSERT INTO product_variants (
+                        product_model_id, color_name, sku, stock, previous_stock, 
+                        url_identifier, mpn_comment, is_active, sync_status, updated_at
+                    )
+                    VALUES (%s, %s, NULL, %s, %s, %s, NULL, TRUE, %s, CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (
+                    model_id, color_name, stock, stock,
+                    tn_handle, 'Exportado' if tn_created else 'Pendiente'
+                ))
+                new_variant_id = cursor.fetchone()['id']
+
+                # 6. Registrar en log de movimientos si se asignó stock inicial
+                if stock > 0:
+                    cursor.execute("""
+                        INSERT INTO stock_movements_log (
+                            source, model_name, color_name, quantity, original_stock, resulting_stock, user_name
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        "Alta Celular", model['name'], color_name, stock, 0, stock, username
+                    ))
+
+                conn.commit()
+                conn.close()
+
+                resp_msg = f"Color '{color_name}' creado con éxito en '{model['name']}'."
+                if tn_created:
+                    resp_msg += " ¡Creado en Tiendanube (Oculto para fotos)!"
+                elif tn_error:
+                    resp_msg += f" Guardado en base de datos (Aviso TN: {tn_error})."
+
+                self.send_json_response(200, {
+                    "success": True,
+                    "variant": {
+                        "id": new_variant_id,
+                        "display_name": f"{model['name']} - {color_name}",
+                        "weight": float(model['weight'] or 0.100),
+                        "stock": stock
+                    },
+                    "message": resp_msg
                 })
             except Exception as e:
                 self.send_json_response(500, {"success": False, "error": str(e)})

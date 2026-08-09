@@ -2,7 +2,9 @@
 const state = {
     user: null,
     variants: [],
+    models: [],
     selectedVariant: null,
+    selectedCreateModelId: null,
     adjustmentQuantity: 0
 };
 
@@ -26,6 +28,7 @@ const DOM = {
     userRoleBadge: document.getElementById('user-role-badge'),
     btnLogout: document.getElementById('btn-logout'),
     btnGoToStock: document.getElementById('go-to-stock'),
+    btnGoToCreateColor: document.getElementById('go-to-create-color'),
     btnGoToAlerts: document.getElementById('go-to-alerts'),
 
     // Ajuste de Stock
@@ -38,6 +41,20 @@ const DOM = {
     adjSign: document.getElementById('adj-sign'),
     btnSaveStock: document.getElementById('btn-save-stock'),
     stockFeedback: document.getElementById('stock-feedback'),
+
+    // Agregar Color
+    screenCreateColor: document.getElementById('screen-create-color'),
+    btnBackFromCreateColor: document.getElementById('back-from-create-color'),
+    createSelectModel: document.getElementById('create-select-model'),
+    createModelsDropdown: document.getElementById('create-models-dropdown-list'),
+    createColorName: document.getElementById('create-color-name'),
+    createInitialStock: document.getElementById('create-initial-stock'),
+    btnCreatePlus1: document.getElementById('btn-create-plus-1'),
+    btnCreatePlus5: document.getElementById('btn-create-plus-5'),
+    btnCreatePlus10: document.getElementById('btn-create-plus-10'),
+    btnCreateReset: document.getElementById('btn-create-reset'),
+    btnSaveNewColor: document.getElementById('btn-save-new-color'),
+    createColorFeedback: document.getElementById('create-color-feedback'),
 
     // Alertas
     btnBackFromAlerts: document.getElementById('back-from-alerts'),
@@ -73,6 +90,22 @@ function setupSession() {
     DOM.userRoleBadge.textContent = state.user.role;
     showScreen(DOM.screenHome);
     fetchVariants();
+    fetchModels();
+}
+
+// ─── CARGA DE MODELOS EN MEMORIA ───
+async function fetchModels() {
+    try {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        if (data.success) {
+            state.models = data.models;
+        } else {
+            console.error("Error al cargar modelos:", data.error);
+        }
+    } catch (err) {
+        console.error("Fallo de conexión al cargar modelos:", err);
+    }
 }
 
 // ─── CARGA DE VARIANTES EN MEMORIA ───
@@ -386,6 +419,15 @@ function setupEventListeners() {
         showScreen(DOM.screenStock);
     });
 
+    DOM.btnGoToCreateColor.addEventListener('click', () => {
+        DOM.createSelectModel.value = '';
+        state.selectedCreateModelId = null;
+        DOM.createColorName.value = '';
+        DOM.createInitialStock.value = '0';
+        DOM.createColorFeedback.style.display = 'none';
+        showScreen(DOM.screenCreateColor);
+    });
+
     DOM.btnGoToAlerts.addEventListener('click', () => {
         DOM.alertsModel.value = '';
         DOM.alertsColor.innerHTML = '<option value="">Seleccione un color...</option>';
@@ -395,6 +437,7 @@ function setupEventListeners() {
     });
 
     DOM.btnBackFromStock.addEventListener('click', () => showScreen(DOM.screenHome));
+    DOM.btnBackFromCreateColor.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromAlerts.addEventListener('click', () => showScreen(DOM.screenHome));
 
     // EVENTOS INPUT MODELO Y COLOR
@@ -534,6 +577,7 @@ async function syncCatalog() {
             alert(data.message);
             // Recargar variantes locales en caché y refrescar pantalla de alertas
             await fetchVariants();
+            await fetchModels();
             await fetchAlerts();
         } else {
             alert(`Error de sincronización: ${data.error}`);
@@ -545,3 +589,101 @@ async function syncCatalog() {
         DOM.btnSyncCatalog.textContent = "🔄 Sincronizar con Tiendanube";
     }
 }
+
+// ─── LÓGICA DE AGREGAR COLOR ───
+function setupCreateModelEvents() {
+    setupSearchableSelect(
+        'create-select-model',
+        'create-models-dropdown-list',
+        () => state.models.map(m => m.name),
+        (selectedName) => {
+            const m = state.models.find(x => x.name.toUpperCase() === selectedName.toUpperCase());
+            if (m) {
+                state.selectedCreateModelId = m.id;
+            }
+            DOM.createColorName.focus();
+        }
+    );
+
+    DOM.createSelectModel.addEventListener('input', () => {
+        const typed = DOM.createSelectModel.value.trim().toUpperCase();
+        const m = state.models.find(x => x.name.toUpperCase() === typed);
+        state.selectedCreateModelId = m ? m.id : null;
+    });
+
+    DOM.btnCreatePlus1.addEventListener('click', () => {
+        DOM.createInitialStock.value = parseInt(DOM.createInitialStock.value || 0) + 1;
+    });
+    DOM.btnCreatePlus5.addEventListener('click', () => {
+        DOM.createInitialStock.value = parseInt(DOM.createInitialStock.value || 0) + 5;
+    });
+    DOM.btnCreatePlus10.addEventListener('click', () => {
+        DOM.createInitialStock.value = parseInt(DOM.createInitialStock.value || 0) + 10;
+    });
+    DOM.btnCreateReset.addEventListener('click', () => {
+        DOM.createInitialStock.value = 0;
+    });
+
+    DOM.btnSaveNewColor.addEventListener('click', handleSaveNewColor);
+}
+
+async function handleSaveNewColor() {
+    const modelId = state.selectedCreateModelId;
+    const modelName = DOM.createSelectModel.value.trim();
+    const colorName = DOM.createColorName.value.trim().toUpperCase();
+    const stock = parseInt(DOM.createInitialStock.value || 0);
+
+    if (!modelId) {
+        showCreateFeedback("⚠️ Por favor, selecciona un modelo de la lista autocompletable.", "error");
+        DOM.createSelectModel.focus();
+        return;
+    }
+    if (!colorName) {
+        showCreateFeedback("⚠️ Por favor, ingresa el nombre del nuevo color.", "error");
+        DOM.createColorName.focus();
+        return;
+    }
+
+    DOM.btnSaveNewColor.disabled = true;
+    DOM.btnSaveNewColor.textContent = "⏳ Creando y sincronizando con Tiendanube...";
+    DOM.createColorFeedback.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/create_variant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model_id: modelId,
+                color_name: colorName,
+                stock: stock,
+                username: state.user ? (state.user.full_name || state.user.username) : 'Celular PWA'
+            })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showCreateFeedback(`✅ ${data.message}`, "success");
+            DOM.createColorName.value = '';
+            DOM.createInitialStock.value = '0';
+            
+            // Recargar variantes para que aparezca de inmediato en Ajuste de Stock
+            await fetchVariants();
+        } else {
+            showCreateFeedback(`❌ ${data.error}`, "error");
+        }
+    } catch (err) {
+        showCreateFeedback("❌ Error de conexión al crear el color.", "error");
+    } finally {
+        DOM.btnSaveNewColor.disabled = false;
+        DOM.btnSaveNewColor.textContent = "💾 Guardar y Crear Color";
+    }
+}
+
+function showCreateFeedback(msg, type) {
+    DOM.createColorFeedback.textContent = msg;
+    DOM.createColorFeedback.className = `feedback-toast ${type}`;
+    DOM.createColorFeedback.style.display = 'block';
+}
+
+// Llamar inicialización de eventos de agregar color
+setupCreateModelEvents();
