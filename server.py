@@ -28,6 +28,40 @@ from services.tiendanube import (
 
 PORT = int(os.environ.get("PORT", 8080))
 
+def build_tags(model_tags, color_name, existing_colors=None):
+    """
+    Combina los tags base del modelo con el color del producto en Proper Case,
+    removiendo cualquier color previo que haya quedado en los tags base.
+    """
+    color_proper = color_name.title() if color_name else ""
+    if not model_tags or not str(model_tags).strip():
+        return color_proper
+
+    tags_list = [t.strip() for t in str(model_tags).split(',') if t.strip()]
+    
+    if existing_colors:
+        colors_upper = {str(c).strip().upper() for c in existing_colors if c}
+        tags_list = [t for t in tags_list if t.upper() not in colors_upper]
+        
+    if color_proper and color_proper.upper() not in {t.upper() for t in tags_list}:
+        tags_list.append(color_proper)
+        
+    return ", ".join(tags_list)
+
+def build_seo_description(base_description, color_name):
+    """
+    Agrega el color al final de la descripción SEO del modelo en minúsculas,
+    removiendo cualquier sufijo 'Color: ...' previo que tuviera la plantilla base.
+    """
+    color_lower = color_name.lower() if color_name else ""
+    if base_description and str(base_description).strip():
+        base = str(base_description).strip()
+        clean_base = re.sub(r'(?i)\s*(?:Color:\s*[^.]*)+$', '', base).strip()
+        if color_lower:
+            return f"{clean_base} Color: {color_lower}"
+        return clean_base
+    return f"Color: {color_lower}" if color_lower else ""
+
 class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         # Permitir CORS para facilitar desarrollo
@@ -338,18 +372,23 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json_response(404, {"success": False, "error": "Modelo no encontrado."})
                     return
 
-                # 2. Verificar que no exista ya ese color para ese modelo
+                # 2. Obtener lista de colores existentes para este modelo y validar duplicados
                 cursor.execute("""
-                    SELECT id FROM product_variants 
-                    WHERE product_model_id = %s AND UPPER(TRIM(color_name)) = %s
-                """, (model_id, color_name))
-                existing = cursor.fetchone()
-                if existing:
+                    SELECT color_name FROM product_variants 
+                    WHERE product_model_id = %s
+                """, (model_id,))
+                existing_colors = [row['color_name'] for row in cursor.fetchall()]
+
+                if color_name in [str(c).strip().upper() for c in existing_colors]:
                     conn.close()
                     self.send_json_response(400, {"success": False, "error": f"El color '{color_name}' ya existe para el modelo '{model['name']}'."})
                     return
 
-                # 3. Generar handle único para Tiendanube
+                # 3. Generar tags y SEO description limpios sin colores viejos
+                tags_clean = build_tags(model['tags'], color_name, existing_colors)
+                seo_desc_clean = build_seo_description(model['seo_description'], color_name)
+
+                # 4. Generar handle único para Tiendanube
                 import re
                 import unicodedata
                 raw_handle_name = f"{model['name']} {color_name}".strip().lower()
@@ -357,7 +396,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 custom_handle = re.sub(r'[^a-z0-9]+', '-', normalized_name)
                 custom_handle = re.sub(r'-+', '-', custom_handle).strip('-')
 
-                # 4. Crear producto en Tiendanube con published=False (oculto para fotos)
+                # 5. Crear producto en Tiendanube con published=False (oculto para fotos)
                 store_id = get_config_value('TiendaNubeStoreId')
                 access_token = get_config_value('TiendaNubeAccessToken')
                 user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
@@ -378,9 +417,9 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                         weight=float(model['weight'] or 0.100),
                         published=False,  # Estrictamente oculto por defecto para fotos
                         color_name=color_name,
-                        tags=model['tags'],
+                        tags=tags_clean,
                         seo_title=model['seo_title'],
-                        seo_description=model['seo_description'],
+                        seo_description=seo_desc_clean,
                         handle=custom_handle
                     )
                     if create_res.get('success'):
