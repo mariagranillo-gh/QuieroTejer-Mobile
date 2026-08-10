@@ -5,6 +5,8 @@ import urllib.parse
 import sys
 import os
 import requests
+import re
+import unicodedata
 
 # Agregar el directorio raíz de la app móvil al path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

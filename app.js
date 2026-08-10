@@ -611,6 +611,13 @@ function setupCreateModelEvents() {
         state.selectedCreateModelId = m ? m.id : null;
     });
 
+    DOM.createColorName.addEventListener('input', (e) => {
+        const start = e.target.selectionStart;
+        const end = e.target.selectionEnd;
+        e.target.value = e.target.value.toUpperCase();
+        e.target.setSelectionRange(start, end);
+    });
+
     DOM.btnCreatePlus1.addEventListener('click', () => {
         DOM.createInitialStock.value = parseInt(DOM.createInitialStock.value || 0) + 1;
     });
