@@ -56,11 +56,13 @@ const DOM = {
     btnSaveNewColor: document.getElementById('btn-save-new-color'),
     createColorFeedback: document.getElementById('create-color-feedback'),
 
-    // Alertas
+    // Alertas / Consulta de Stock
     btnBackFromAlerts: document.getElementById('back-from-alerts'),
     alertsModel: document.getElementById('alerts-model'),
     alertsColor: document.getElementById('alerts-color'),
+    alertsOperator: document.getElementById('alerts-operator'),
     alertsLimit: document.getElementById('alerts-limit'),
+    btnShareWhatsApp: document.getElementById('btn-share-whatsapp'),
     alertsList: document.getElementById('alerts-list'),
     alertsLoading: document.getElementById('alerts-loading'),
     btnSyncCatalog: document.getElementById('btn-sync-catalog')
@@ -284,18 +286,21 @@ async function fetchLiveStock(variantId) {
     }
 }
 
-// ─── CARGA Y FILTRADO DE ALERTAS ───
+// ─── CARGA Y FILTRADO DE CONSULTA DE STOCK ───
 async function fetchAlerts() {
     DOM.alertsLoading.style.display = 'block';
     DOM.alertsList.innerHTML = '';
     
-    const limit = DOM.alertsLimit.value;
+    const limit = DOM.alertsLimit ? DOM.alertsLimit.value : 10;
+    const operator = DOM.alertsOperator ? DOM.alertsOperator.value : '>=';
+    
     try {
-        const response = await fetch(`/api/alerts?min_stock=${limit}`);
+        const response = await fetch(`/api/alerts?min_stock=${encodeURIComponent(limit)}&operator=${encodeURIComponent(operator)}`);
         const data = await response.json();
         DOM.alertsLoading.style.display = 'none';
         
         if (data.success) {
+            state.alerts = data.alerts;
             renderAlertsList(data.alerts);
         } else {
             DOM.alertsList.innerHTML = `<div class="alerts-status error">Error: ${data.error}</div>`;
@@ -311,7 +316,7 @@ function handleAlertsModelChange() {
     const validModels = getValidModels();
 
     if (!typedModel || !validModels.has(typedModel)) {
-        DOM.alertsColor.innerHTML = '<option value="">Seleccione un color...</option>';
+        DOM.alertsColor.innerHTML = '<option value="">Todos los colores...</option>';
         DOM.alertsColor.disabled = true;
         return;
     }
@@ -325,7 +330,7 @@ function handleAlertsModelChange() {
         }
     });
 
-    DOM.alertsColor.innerHTML = '<option value="">Seleccione un color...</option>';
+    DOM.alertsColor.innerHTML = '<option value="">Todos los colores...</option>';
     Array.from(colors).sort().forEach(colorName => {
         const opt = document.createElement('option');
         opt.value = colorName;
@@ -348,7 +353,7 @@ function renderAlertsList(alerts) {
     }
 
     if (filteredAlerts.length === 0) {
-        DOM.alertsList.innerHTML = '<div class="alerts-status">No se encontraron productos críticos.</div>';
+        DOM.alertsList.innerHTML = '<div class="alerts-status">No se encontraron productos con ese criterio.</div>';
         return;
     }
 
@@ -357,16 +362,24 @@ function renderAlertsList(alerts) {
         const card = document.createElement('div');
         card.className = 'alert-card';
         
-        const isCritical = (a.stock ?? 0) <= 0;
-        const badgeClass = isCritical ? 'critical' : 'low';
-        const badgeText = isCritical ? 'Sin Stock' : `${a.stock} u`;
+        const stock = a.stock ?? 0;
+        let badgeClass = 'available';
+        let badgeText = `${stock} u`;
+        
+        if (stock <= 0) {
+            badgeClass = 'critical';
+            badgeText = 'Sin Stock (0 u)';
+        } else if (stock <= 10) {
+            badgeClass = 'low';
+            badgeText = `${stock} u`;
+        }
 
         card.innerHTML = `
             <div class="alert-info">
-                <h4>${a.model_name}</h4>
-                <p>${a.color_name}</p>
+                <div class="alert-model">${a.model_name}</div>
+                <div class="alert-color">${a.color_name}</div>
             </div>
-            <div class="alert-badge ${badgeClass}">${badgeText}</div>
+            <span class="alert-badge ${badgeClass}">${badgeText}</span>
         `;
         DOM.alertsList.appendChild(card);
     });
@@ -472,7 +485,11 @@ function setupEventListeners() {
         fetchAlerts();
     });
     DOM.alertsColor.addEventListener('change', fetchAlerts);
+    DOM.alertsOperator.addEventListener('change', fetchAlerts);
     DOM.alertsLimit.addEventListener('change', fetchAlerts);
+    if (DOM.btnShareWhatsApp) {
+        DOM.btnShareWhatsApp.addEventListener('click', shareStockOnWhatsApp);
+    }
 
     // Configurar selectores autocompletables personalizados (estilo dropdown)
     setupSearchableSelect('select-model', 'models-dropdown-list', 
@@ -690,6 +707,57 @@ function showCreateFeedback(msg, type) {
     DOM.createColorFeedback.textContent = msg;
     DOM.createColorFeedback.className = `feedback-toast ${type}`;
     DOM.createColorFeedback.style.display = 'block';
+}
+
+// ─── COMPARTIR POR WHATSAPP ───
+function shareStockOnWhatsApp() {
+    const modelVal = DOM.alertsModel.value.trim();
+    const colorVal = DOM.alertsColor.value.trim();
+    const op = DOM.alertsOperator ? DOM.alertsOperator.value : '>=';
+    const limit = DOM.alertsLimit ? DOM.alertsLimit.value : 10;
+    
+    let list = state.alerts || [];
+    if (modelVal) {
+        list = list.filter(a => a.model_name.toUpperCase().includes(modelVal.toUpperCase()));
+    }
+    if (colorVal) {
+        list = list.filter(a => a.color_name.toUpperCase().includes(colorVal.toUpperCase()));
+    }
+    
+    if (list.length === 0) {
+        alert("No hay productos en la lista para compartir.");
+        return;
+    }
+    
+    const grouped = {};
+    list.forEach(item => {
+        if (!grouped[item.model_name]) {
+            grouped[item.model_name] = [];
+        }
+        grouped[item.model_name].push(item);
+    });
+    
+    let text = `🧶 *Stock Disponible - QuieroTejer*\n`;
+    if (modelVal) text += `📦 *Modelo:* ${modelVal}\n`;
+    text += `📊 *Filtro:* Stock ${op} ${limit} u\n\n`;
+    
+    for (const [model, variants] of Object.entries(grouped)) {
+        text += `*${model}:*\n`;
+        variants.forEach(v => {
+            text += `  • ${v.color_name}: ${v.stock} u\n`;
+        });
+        text += `\n`;
+    }
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert("📋 ¡Lista copiada al portapapeles! Ya podés pegarla en WhatsApp.");
+        }).catch(() => {
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        });
+    } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    }
 }
 
 // Llamar inicialización de eventos de agregar color

@@ -36,19 +36,21 @@ def get_dashboard_stats(min_stock=0):
     finally:
         conn.close()
 
-def get_stock_faltante_list(min_stock=0):
+def get_stock_faltante_list(min_stock=10, operator='>='):
     """
-    Retorna la lista de variantes activas con stock menor o igual al límite.
+    Retorna la lista de variantes activas filtradas por stock según el operador (>= o <=).
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("""
+        op = ">=" if str(operator).strip() == ">=" else "<="
+        order_dir = "v.stock DESC" if op == ">=" else "v.stock ASC"
+        cursor.execute(f"""
             SELECT m.name AS model_name, v.color_name, m.price, v.stock
             FROM product_variants v
             JOIN product_models m ON v.product_model_id = m.id
-            WHERE v.stock <= %s AND v.is_active = TRUE
-            ORDER BY m.name, v.color_name
+            WHERE v.stock {op} %s AND v.is_active = TRUE
+            ORDER BY {order_dir}, m.name, v.color_name
         """, (min_stock,))
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

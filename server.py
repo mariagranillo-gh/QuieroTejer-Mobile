@@ -108,7 +108,8 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
         elif path == "/api/alerts":
             try:
                 min_stock = int(query_params.get("min_stock", [10])[0])
-                alerts = get_stock_faltante_list(min_stock=min_stock)
+                operator = query_params.get("operator", [">="])[0]
+                alerts = get_stock_faltante_list(min_stock=min_stock, operator=operator)
                 self.send_json_response(200, {"success": True, "alerts": alerts})
             except Exception as e:
                 self.send_json_response(500, {"success": False, "error": str(e)})
@@ -264,7 +265,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 access_token = get_config_value('TiendaNubeAccessToken')
                 user_agent = get_config_value('TiendaNubeUserAgent') or "QuieroTejer (administracion@quierotejer.com)"
 
-                sync_msg = "Ajuste guardado localmente."
+                sync_msg = f"{model_name} {color_name} guardado localmente."
                 sync_success = False
 
                 if store_id and access_token and user_agent:
