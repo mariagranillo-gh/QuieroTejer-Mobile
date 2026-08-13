@@ -483,6 +483,39 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(500, {"success": False, "error": str(e)})
             return
 
+        elif path == "/api/upload_picker_file":
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                session_id = data.get("session_id")
+                file_name = data.get("file_name")
+                mime_type = data.get("mime_type")
+                file_base64 = data.get("file_base64")
+                
+                if not session_id or not file_base64:
+                    self.send_json_response(400, {"success": False, "error": "Faltan datos obligatorios."})
+                    return
+                
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO google_picker_transfers (session_id, file_name, mime_type, file_base64)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (session_id) DO UPDATE 
+                    SET file_name = EXCLUDED.file_name,
+                        mime_type = EXCLUDED.mime_type,
+                        file_base64 = EXCLUDED.file_base64,
+                        created_at = NOW()
+                """, (session_id, file_name, mime_type, file_base64))
+                conn.commit()
+                conn.close()
+                
+                self.send_json_response(200, {"success": True, "message": "Archivo transferido exitosamente."})
+            except Exception as e:
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
         elif path == "/api/webhook":
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
