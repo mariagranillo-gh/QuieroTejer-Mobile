@@ -737,14 +737,27 @@ function shareStockOnWhatsApp() {
         grouped[item.model_name].push(item);
     });
     
-    let text = `🧶 *Stock Disponible - QuieroTejer*\n`;
+    const isDisponibles = (op === '>=');
+    let text = isDisponibles ? `🧶 *Disponibilidad Mayorista - QuieroTejer*\n` : `🧶 *Faltantes de Stock - QuieroTejer*\n`;
     if (modelVal) text += `📦 *Modelo:* ${modelVal}\n`;
     text += `📊 *Filtro:* Stock ${op} ${limit} u\n\n`;
     
-    for (const [model, variants] of Object.entries(grouped)) {
+    const sortedModelNames = Object.keys(grouped).sort();
+    for (const model of sortedModelNames) {
+        const variants = grouped[model];
+        // Ordenar variantes alfabéticamente por color
+        variants.sort((a, b) => a.color_name.localeCompare(b.color_name));
+        
         text += `*${model}:*\n`;
         variants.forEach(v => {
-            text += `  • ${v.color_name}: ${v.stock} u\n`;
+            if (isDisponibles) {
+                const weightKg = parseFloat(v.weight || 0.100);
+                const totalKg = v.stock * weightKg;
+                const floorKg = Math.floor(totalKg);
+                text += `  • ${v.color_name}: ${floorKg}k\n`;
+            } else {
+                text += `  • ${v.color_name}: ${v.stock} u\n`;
+            }
         });
         text += `\n`;
     }

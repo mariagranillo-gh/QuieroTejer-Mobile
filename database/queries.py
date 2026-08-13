@@ -38,19 +38,21 @@ def get_dashboard_stats(min_stock=0):
 
 def get_stock_faltante_list(min_stock=10, operator='>='):
     """
-    Retorna la lista de variantes activas filtradas por stock según el operador (>= o <=).
+    Retorna la lista de variantes activas filtradas por stock según el operador (>= o <=),
+    excluyendo variantes dadas de baja (con mpn_comment) y ordenando alfabéticamente por modelo y color.
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
         op = ">=" if str(operator).strip() == ">=" else "<="
-        order_dir = "v.stock DESC" if op == ">=" else "v.stock ASC"
         cursor.execute(f"""
-            SELECT m.name AS model_name, v.color_name, m.price, v.stock
+            SELECT m.name AS model_name, v.color_name, m.price, v.stock, COALESCE(m.weight, 0.100) AS weight
             FROM product_variants v
             JOIN product_models m ON v.product_model_id = m.id
-            WHERE v.stock {op} %s AND v.is_active = TRUE
-            ORDER BY {order_dir}, m.name, v.color_name
+            WHERE v.stock {op} %s 
+              AND v.is_active = TRUE
+              AND (v.mpn_comment IS NULL OR TRIM(v.mpn_comment) = '')
+            ORDER BY m.name ASC, v.color_name ASC
         """, (min_stock,))
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
