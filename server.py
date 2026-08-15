@@ -119,6 +119,19 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response(500, {"success": False, "error": str(e)})
             return
 
+        elif path == "/api/picker_config":
+            try:
+                client_id = get_config_value('GoogleClientId')
+                api_key = get_config_value('GoogleApiKey')
+                self.send_json_response(200, {
+                    "success": True,
+                    "clientId": client_id,
+                    "apiKey": api_key
+                })
+            except Exception as e:
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
         elif path == "/api/live_stock":
             try:
                 variant_id = int(query_params.get("variant_id", [0])[0])
