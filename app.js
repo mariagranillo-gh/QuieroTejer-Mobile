@@ -16,6 +16,8 @@ const DOM = {
     screenHome: document.getElementById('screen-home'),
     screenStock: document.getElementById('screen-stock'),
     screenAlerts: document.getElementById('screen-alerts'),
+    screenCreateColor: document.getElementById('screen-create-color'),
+    screenUploadRemito: document.getElementById('screen-upload-remito'),
 
     // Login
     loginForm: document.getElementById('login-form'),
@@ -30,6 +32,7 @@ const DOM = {
     btnGoToStock: document.getElementById('go-to-stock'),
     btnGoToCreateColor: document.getElementById('go-to-create-color'),
     btnGoToAlerts: document.getElementById('go-to-alerts'),
+    btnGoToUploadRemito: document.getElementById('go-to-upload-remito'),
 
     // Ajuste de Stock
     btnBackFromStock: document.getElementById('back-from-stock'),
@@ -43,7 +46,6 @@ const DOM = {
     stockFeedback: document.getElementById('stock-feedback'),
 
     // Agregar Color
-    screenCreateColor: document.getElementById('screen-create-color'),
     btnBackFromCreateColor: document.getElementById('back-from-create-color'),
     createSelectModel: document.getElementById('create-select-model'),
     createModelsDropdown: document.getElementById('create-models-dropdown-list'),
@@ -65,7 +67,16 @@ const DOM = {
     btnShareWhatsApp: document.getElementById('btn-share-whatsapp'),
     alertsList: document.getElementById('alerts-list'),
     alertsLoading: document.getElementById('alerts-loading'),
-    btnSyncCatalog: document.getElementById('btn-sync-catalog')
+    btnSyncCatalog: document.getElementById('btn-sync-catalog'),
+
+    // Subir Remito
+    btnBackFromUploadRemito: document.getElementById('back-from-upload-remito'),
+    remitoFileInput: document.getElementById('remito-file-input'),
+    remitoPreviewContainer: document.getElementById('remito-preview-container'),
+    remitoPreviewImg: document.getElementById('remito-preview-img'),
+    remitoPreviewFilename: document.getElementById('remito-preview-filename'),
+    btnSubmitRemito: document.getElementById('btn-submit-remito'),
+    uploadRemitoFeedback: document.getElementById('upload-remito-feedback')
 };
 
 // ─── NAVEGACIÓN ENTRE PANTALLAS ───
@@ -449,9 +460,22 @@ function setupEventListeners() {
         showScreen(DOM.screenAlerts);
     });
 
+    DOM.btnGoToUploadRemito.addEventListener('click', () => {
+        DOM.remitoFileInput.value = '';
+        DOM.remitoPreviewContainer.style.display = 'none';
+        DOM.btnSubmitRemito.style.display = 'none';
+        DOM.uploadRemitoFeedback.style.display = 'none';
+        showScreen(DOM.screenUploadRemito);
+    });
+
     DOM.btnBackFromStock.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromCreateColor.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromAlerts.addEventListener('click', () => showScreen(DOM.screenHome));
+    DOM.btnBackFromUploadRemito.addEventListener('click', () => showScreen(DOM.screenHome));
+
+    // EVENTOS SUBIR REMITO DESDE ARCHIVO
+    DOM.remitoFileInput.addEventListener('change', handleRemitoFileSelect);
+    DOM.btnSubmitRemito.addEventListener('click', handleRemitoUploadSubmit);
 
     // EVENTOS INPUT MODELO Y COLOR
     DOM.selectModel.addEventListener('input', handleModelChange);
@@ -775,3 +799,75 @@ function shareStockOnWhatsApp() {
 
 // Llamar inicialización de eventos de agregar color
 setupCreateModelEvents();
+
+// ─── LÓGICA DE SUBIR REMITO DESDE EL CELULAR ───
+let remitoFileBase64 = null;
+let remitoFileName = "";
+let remitoFileType = "";
+
+function handleRemitoFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    remitoFileName = file.name;
+    remitoFileType = file.type;
+    DOM.remitoPreviewFilename.textContent = file.name;
+    
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        remitoFileBase64 = evt.target.result.split(',')[1];
+        
+        // Si es una imagen, mostrar previsualización
+        if (file.type.startsWith('image/')) {
+            DOM.remitoPreviewImg.src = evt.target.result;
+            DOM.remitoPreviewImg.style.display = 'inline-block';
+        } else {
+            // Si es PDF u otro, ocultar imagen
+            DOM.remitoPreviewImg.style.display = 'none';
+        }
+        DOM.remitoPreviewContainer.style.display = 'block';
+        DOM.btnSubmitRemito.style.display = 'inline-block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function handleRemitoUploadSubmit() {
+    if (!remitoFileBase64) return;
+    
+    DOM.btnSubmitRemito.disabled = true;
+    DOM.btnSubmitRemito.textContent = "⏳ Subiendo remito...";
+    DOM.uploadRemitoFeedback.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/upload_mobile_file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_name: remitoFileName,
+                mime_type: remitoFileType,
+                file_base64: remitoFileBase64
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showRemitoFeedback("✅ ¡Remito subido con éxito! Ya podés verlo y procesarlo en la PC.", "success");
+            DOM.remitoFileInput.value = '';
+            DOM.remitoPreviewContainer.style.display = 'none';
+            DOM.btnSubmitRemito.style.display = 'none';
+        } else {
+            showRemitoFeedback(`❌ Error: ${data.error}`, "error");
+        }
+    } catch (err) {
+        showRemitoFeedback("❌ Error de conexión al subir el archivo.", "error");
+    } finally {
+        DOM.btnSubmitRemito.disabled = false;
+        DOM.btnSubmitRemito.textContent = "📤 Subir Remito para PC";
+    }
+}
+
+function showRemitoFeedback(msg, type) {
+    DOM.uploadRemitoFeedback.textContent = msg;
+    DOM.uploadRemitoFeedback.className = `feedback-toast ${type}`;
+    DOM.uploadRemitoFeedback.style.display = 'block';
+}
