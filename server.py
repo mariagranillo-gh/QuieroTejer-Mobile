@@ -25,7 +25,8 @@ from services.tiendanube import (
     get_variant_by_sku,
     update_variant_stock_price,
     update_product_visibility,
-    create_tiendanube_product
+    create_tiendanube_product,
+    find_or_create_category_hierarchy
 )
 
 PORT = int(os.environ.get("PORT", 8080))
@@ -426,6 +427,21 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 tn_error = None
 
                 if store_id and access_token:
+                    # Mapear categoría (y crear jerarquía en Tiendanube si no existe)
+                    categories_list = None
+                    if model['category']:
+                        try:
+                            cat_id = find_or_create_category_hierarchy(
+                                store_id=store_id,
+                                access_token=access_token,
+                                user_agent=user_agent,
+                                cat_name=model['category']
+                            )
+                            if cat_id:
+                                categories_list = [cat_id]
+                        except Exception as cat_ex:
+                            print(f"Advertencia al mapear categoría: {cat_ex}")
+                            
                     create_res = create_tiendanube_product(
                         store_id=store_id,
                         access_token=access_token,
@@ -437,6 +453,7 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                         weight=float(model['weight'] or 0.100),
                         published=False,  # Estrictamente oculto por defecto para fotos
                         color_name=color_name,
+                        categories=categories_list,
                         tags=tags_clean,
                         seo_title=model['seo_title'],
                         seo_description=seo_desc_clean,

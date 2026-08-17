@@ -428,3 +428,68 @@ def create_tiendanube_category(store_id, access_token, user_agent, name_es, pare
     except Exception:
         pass
     return None
+
+
+def find_or_create_category_hierarchy(store_id, access_token, user_agent, cat_name):
+    """
+    Busca o crea jerárquicamente categorías en Tiendanube a partir de una cadena con separador '>'.
+    Retorna el ID de la categoría hoja final.
+    """
+    if not cat_name:
+        return None
+        
+    parts_raw = [p.strip() for p in str(cat_name).split(">") if p.strip()]
+    if not parts_raw:
+        return None
+        
+    tn_categories = get_tiendanube_categories(store_id, access_token, user_agent)
+    parent_id = None
+    
+    for part in parts_raw:
+        part_lower = part.lower()
+        found_id = None
+        
+        if tn_categories:
+            for cat in tn_categories:
+                cat_parent = cat.get("parent")
+                
+                parent_match = False
+                if parent_id is None:
+                    parent_match = (cat_parent is None or cat_parent == 0 or cat_parent == "0")
+                else:
+                    parent_match = (cat_parent is not None and int(cat_parent) == int(parent_id))
+                    
+                if parent_match:
+                    cat_names = cat.get("name", {})
+                    if isinstance(cat_names, dict):
+                        for val in cat_names.values():
+                            if val and str(val).strip().lower() == part_lower:
+                                found_id = cat.get("id")
+                                break
+                    elif isinstance(cat_names, str) and cat_names.strip().lower() == part_lower:
+                        found_id = cat.get("id")
+                        break
+                if found_id:
+                    break
+                    
+        if found_id is not None:
+            parent_id = found_id
+        else:
+            new_cat_id = create_tiendanube_category(
+                store_id=store_id,
+                access_token=access_token,
+                user_agent=user_agent,
+                name_es=part,
+                parent_id=parent_id
+            )
+            if new_cat_id:
+                tn_categories.append({
+                    "id": new_cat_id,
+                    "name": {"es": part},
+                    "parent": parent_id
+                })
+                parent_id = new_cat_id
+            else:
+                break
+                
+    return parent_id
