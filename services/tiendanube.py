@@ -383,22 +383,39 @@ def create_tiendanube_product(
 
 def get_tiendanube_categories(store_id, access_token, user_agent):
     """
-    Obtiene todas las categorías de la tienda en TiendaNube.
+    Obtiene todas las categorías de la tienda en TiendaNube, paginando para traer el listado completo.
     Retorna una lista de diccionarios con las categorías, o una lista vacía si falla.
     """
+    if not store_id or not access_token or not user_agent:
+        return []
+        
     url = f"https://api.tiendanube.com/v1/{str(store_id).strip()}/categories"
     headers = {
         "Authorization": f"Bearer {str(access_token).strip()}",
         "User-Agent": str(user_agent).strip(),
         "Content-Type": "application/json"
     }
+    
+    categories = []
+    page = 1
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
+        while True:
+            response = requests.get(url, headers=headers, params={"per_page": 100, "page": page}, timeout=10)
+            if response.status_code == 200:
+                page_categories = response.json()
+                if not page_categories:
+                    break
+                categories.extend(page_categories)
+                if len(page_categories) < 100:
+                    break
+                page += 1
+            else:
+                break
     except Exception:
         pass
-    return []
+        
+    return categories
 
 
 def create_tiendanube_category(store_id, access_token, user_agent, name_es, parent_id=None):
