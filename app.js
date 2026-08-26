@@ -18,6 +18,7 @@ const DOM = {
     screenAlerts: document.getElementById('screen-alerts'),
     screenCreateColor: document.getElementById('screen-create-color'),
     screenUploadRemito: document.getElementById('screen-upload-remito'),
+    screenReports: document.getElementById('screen-reports'),
 
     // Login
     loginForm: document.getElementById('login-form'),
@@ -33,6 +34,7 @@ const DOM = {
     btnGoToCreateColor: document.getElementById('go-to-create-color'),
     btnGoToAlerts: document.getElementById('go-to-alerts'),
     btnGoToUploadRemito: document.getElementById('go-to-upload-remito'),
+    btnGoToReports: document.getElementById('go-to-reports'),
 
     // Ajuste de Stock
     btnBackFromStock: document.getElementById('back-from-stock'),
@@ -76,7 +78,12 @@ const DOM = {
     remitoPreviewImg: document.getElementById('remito-preview-img'),
     remitoPreviewFilename: document.getElementById('remito-preview-filename'),
     btnSubmitRemito: document.getElementById('btn-submit-remito'),
-    uploadRemitoFeedback: document.getElementById('upload-remito-feedback')
+    uploadRemitoFeedback: document.getElementById('upload-remito-feedback'),
+
+    // Reportes
+    btnBackFromReports: document.getElementById('back-from-reports'),
+    reportTotalWeight: document.getElementById('report-total-weight'),
+    reportCategoriesContainer: document.getElementById('report-categories-container')
 };
 
 // ─── NAVEGACIÓN ENTRE PANTALLAS ───
@@ -101,6 +108,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupSession() {
     DOM.homeUserGreeting.textContent = `Hola, ${state.user.full_name || state.user.username} 👋`;
     DOM.userRoleBadge.textContent = state.user.role;
+    
+    // Solo permitir visualizar el reporte si el rol es 'admin'
+    if (state.user.role === 'admin') {
+        DOM.btnGoToReports.style.display = 'flex';
+    } else {
+        DOM.btnGoToReports.style.display = 'none';
+    }
+    
     showScreen(DOM.screenHome);
     fetchVariants();
     fetchModels();
@@ -468,10 +483,16 @@ function setupEventListeners() {
         showScreen(DOM.screenUploadRemito);
     });
 
+    DOM.btnGoToReports.addEventListener('click', () => {
+        loadReportData();
+        showScreen(DOM.screenReports);
+    });
+
     DOM.btnBackFromStock.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromCreateColor.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromAlerts.addEventListener('click', () => showScreen(DOM.screenHome));
     DOM.btnBackFromUploadRemito.addEventListener('click', () => showScreen(DOM.screenHome));
+    DOM.btnBackFromReports.addEventListener('click', () => showScreen(DOM.screenHome));
 
     // EVENTOS SUBIR REMITO DESDE ARCHIVO
     DOM.remitoFileInput.addEventListener('change', handleRemitoFileSelect);
@@ -870,4 +891,51 @@ function showRemitoFeedback(msg, type) {
     DOM.uploadRemitoFeedback.textContent = msg;
     DOM.uploadRemitoFeedback.className = `feedback-toast ${type}`;
     DOM.uploadRemitoFeedback.style.display = 'block';
+}
+
+async function loadReportData() {
+    DOM.reportTotalWeight.textContent = "⏳ Cargando...";
+    DOM.reportCategoriesContainer.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">Cargando reporte de stock...</div>';
+    
+    try {
+        const response = await fetch('/api/reports');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Formatear peso total
+            const totalWeight = parseFloat(data.total_weight_kg || 0);
+            DOM.reportTotalWeight.textContent = `${totalWeight.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+            
+            // Generar distribución por categorías
+            if (data.categories && data.categories.length > 0) {
+                let html = '';
+                data.categories.forEach(cat => {
+                    const catName = cat.main_category || 'SIN CATEGORÍA';
+                    const catWeight = parseFloat(cat.total_weight_kg || 0);
+                    const catUnits = parseInt(cat.total_units || 0);
+                    
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div>
+                                <div style="font-weight: 700; color: #334155; font-size: 0.95rem;">${catName}</div>
+                                <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">${catUnits.toLocaleString('es-AR')} unidades</div>
+                            </div>
+                            <div style="font-weight: 800; color: #0f172a; font-size: 1.1rem; text-align: right;">
+                                ${catWeight.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                            </div>
+                        </div>
+                    `;
+                });
+                DOM.reportCategoriesContainer.innerHTML = html;
+            } else {
+                DOM.reportCategoriesContainer.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">No hay stock activo para reportar.</div>';
+            }
+        } else {
+            DOM.reportTotalWeight.textContent = "Error";
+            DOM.reportCategoriesContainer.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 20px;">Error: ${data.error}</div>`;
+        }
+    } catch (err) {
+        DOM.reportTotalWeight.textContent = "Error";
+        DOM.reportCategoriesContainer.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Error de conexión con el servidor.</div>';
+    }
 }

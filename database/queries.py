@@ -822,5 +822,64 @@ def get_variants_without_url():
         conn.close()
 
 
+def get_stock_report_total():
+    """
+    Retorna los totales generales de stock de la tienda.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                COUNT(DISTINCT v.id) AS total_variants,
+                COUNT(DISTINCT m.id) AS total_models,
+                COALESCE(SUM(v.stock), 0) AS total_units,
+                COALESCE(SUM(v.stock * COALESCE(m.weight, 0.100)), 0) AS total_weight_kg,
+                COALESCE(SUM(v.stock * COALESCE(m.price, 0.0)), 0) AS total_value_ars
+            FROM product_variants v
+            JOIN product_models m ON v.product_model_id = m.id
+            WHERE v.is_active = TRUE
+        """)
+        row = cursor.fetchone()
+        return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
+def get_stock_report_by_category():
+    """
+    Retorna el resumen de stock agrupado por la categoría principal (primera palabra de la ruta).
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            WITH categorized_models AS (
+                SELECT 
+                    id,
+                    name,
+                    weight,
+                    price,
+                    UPPER(TRIM(SPLIT_PART(COALESCE(category, 'SIN CATEGORIA'), '>', 1))) AS main_category
+                FROM product_models
+            )
+            SELECT 
+                c.main_category,
+                COUNT(DISTINCT c.id) AS total_models,
+                COUNT(DISTINCT v.id) AS total_variants,
+                COALESCE(SUM(v.stock), 0) AS total_units,
+                COALESCE(SUM(v.stock * COALESCE(c.weight, 0.100)), 0) AS total_weight_kg,
+                COALESCE(SUM(v.stock * COALESCE(c.price, 0.0)), 0) AS total_value_ars
+            FROM product_variants v
+            JOIN categorized_models c ON v.product_model_id = c.id
+            WHERE v.is_active = TRUE
+            GROUP BY c.main_category
+            ORDER BY total_units DESC, total_weight_kg DESC
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
 
 

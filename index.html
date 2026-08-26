@@ -87,6 +87,14 @@
                         <p>Sacá una foto de un remito o subí un archivo para la PC</p>
                     </div>
                 </button>
+
+                <button class="menu-card" id="go-to-reports" style="display: none;">
+                    <div class="menu-icon">📊</div>
+                    <div class="menu-details">
+                        <h3>Reporte de Stock</h3>
+                        <p>Stock total y por categoría en kilogramos</p>
+                    </div>
+                </button>
             </div>
         </div>
 
@@ -269,6 +277,27 @@
                 </button>
                 
                 <div id="upload-remito-feedback" class="feedback-msg" style="margin-top: 15px; font-weight: 500; text-align: center;"></div>
+            </div>
+        </div>
+
+        <!-- ─── SCREEN 7: REPORTS ─── -->
+        <div id="screen-reports" class="screen">
+            <header class="screen-header">
+                <button class="btn-back" id="back-from-reports">⬅️ Volver</button>
+                <h2>Reporte de Stock</h2>
+            </header>
+            
+            <div class="content-card" style="padding: 20px;">
+                <div style="text-align: center; margin-bottom: 25px; padding: 15px; background-color: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
+                    <div style="font-size: 0.95rem; color: #166534; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">⚖️ Peso Total de Lana</div>
+                    <div id="report-total-weight" style="font-size: 2.25rem; font-weight: 800; color: #14532d; margin-top: 5px;">0.00 kg</div>
+                </div>
+                
+                <h3 style="font-size: 1.1rem; color: #1e293b; margin-top: 10px; margin-bottom: 15px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Distribución por Categoría</h3>
+                
+                <div id="report-categories-container" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Se llena con JS -->
+                </div>
             </div>
         </div>
         

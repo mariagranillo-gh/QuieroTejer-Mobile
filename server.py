@@ -18,7 +18,9 @@ from database.queries import (
     get_stock_faltante_list,
     apply_stock_movement,
     get_config_value,
-    update_variants_sync_status
+    update_variants_sync_status,
+    get_stock_report_total,
+    get_stock_report_by_category
 )
 from services.tiendanube import (
     get_variant_by_url_and_color,
@@ -106,6 +108,19 @@ class MobileAPIHandler(http.server.SimpleHTTPRequestHandler):
                 models = cursor.fetchall()
                 conn.close()
                 self.send_json_response(200, {"success": True, "models": [dict(m) for m in models]})
+            except Exception as e:
+                self.send_json_response(500, {"success": False, "error": str(e)})
+            return
+
+        elif path == "/api/reports":
+            try:
+                total_data = get_stock_report_total()
+                category_data = get_stock_report_by_category()
+                self.send_json_response(200, {
+                    "success": True, 
+                    "total_weight_kg": total_data.get("total_weight_kg", 0.0),
+                    "categories": category_data
+                })
             except Exception as e:
                 self.send_json_response(500, {"success": False, "error": str(e)})
             return
