@@ -110,7 +110,7 @@ function setupSession() {
     DOM.userRoleBadge.textContent = state.user.role;
     
     // Solo permitir visualizar el reporte si el rol es 'admin'
-    if (state.user.role === 'admin') {
+    if (state.user && state.user.role && state.user.role.toLowerCase() === 'admin') {
         DOM.btnGoToReports.style.display = 'flex';
     } else {
         DOM.btnGoToReports.style.display = 'none';
